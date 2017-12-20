@@ -63,14 +63,12 @@ public class FinagleCollector extends Collector {
       JSONObject histJsonObject = this.getResponse(this.histogramsUrl);
       for (Object key : histJsonObject.keySet()) {    	  
     	  String keyStr = (String) key;
-    	  System.out.println("key: " + keyStr);
     	  String bucketName = transformMetricName(keyStr) + "_bucket";
     	  String counterName = transformMetricName(keyStr) + "_count";
     	  JSONArray valArray = (JSONArray) histJsonObject.get(keyStr);
     	  double le = 0;
     	  double count = 0;
     	  List<MetricFamilySamples.Sample> samples = new ArrayList<MetricFamilySamples.Sample>();
-    	  System.out.println("values: " + valArray.size());
     	  for (int i = 0; i <= valArray.size(); i++) {
     		  List<String> labelNames = new ArrayList<String>();
               List<String> labelValues = new ArrayList<String>();
