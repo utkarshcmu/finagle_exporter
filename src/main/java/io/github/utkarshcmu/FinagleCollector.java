@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -18,10 +19,15 @@ import org.json.simple.parser.ParseException;
 public class FinagleCollector extends Collector {
     private static final Logger LOGGER = Logger.getLogger(FinagleCollector.class.getName());
     
-    private String url;
+    private String metricsUrl;
+    private String histogramsUrl;
     
     public FinagleCollector(String host, int port) {
-		this.url = "http://" + host + ":" + port + "/admin/metrics.json";
+		this.metricsUrl = "http://" + host + ":" + port + "/admin/metrics.json";
+		this.histogramsUrl = "http://" + host + ":" + port + "/admin/histograms.json";
+    	// For local testing:
+		//this.metricsUrl = "http://localhost:3000/response";
+		//this.histogramsUrl = "http://localhost:3000/response2";
 	}
 
     private String transformMetricName(String s) {
@@ -29,18 +35,21 @@ public class FinagleCollector extends Collector {
     	return s.replaceAll("/", "__").replaceAll("\\.","_").toLowerCase();
     }
     
+    private JSONObject getResponse(String url) throws IOException, ParseException {
+    	JSONParser jsonParser = new JSONParser();
+    	URL obj = new URL(url);
+        HttpURLConnection con = (HttpURLConnection) obj.openConnection();
+        JSONObject jsonObject = (JSONObject)jsonParser.parse(new InputStreamReader(con.getInputStream(), "UTF-8"));      
+        con.disconnect();
+        return jsonObject;
+    }
+    
     private void scrape(List<MetricFamilySamples> mfs) throws CloneNotSupportedException, IOException, ParseException {
       
-      URL obj = new URL(this.url);
-      HttpURLConnection con = (HttpURLConnection) obj.openConnection();
-      //int status = con.getResponseCode();
-      JSONParser jsonParser = new JSONParser();
-      JSONObject jsonObject = (JSONObject)jsonParser.parse(new InputStreamReader(con.getInputStream(), "UTF-8"));      
-      con.disconnect();
-      
-      for (Object key : jsonObject.keySet()) {
-          String keyStr = (String)key;
-          double keyValue = new Double(jsonObject.get(keyStr).toString());
+      JSONObject metricsJsonObject = this.getResponse(this.metricsUrl);
+      for (Object key : metricsJsonObject.keySet()) {
+          String keyStr = (String) key;
+          double keyValue = new Double(metricsJsonObject.get(keyStr).toString());
           List<String> labelNames = new ArrayList<String>();
           List<String> labelValues = new ArrayList<String>();
           labelNames.add("original_key");
@@ -51,6 +60,43 @@ public class FinagleCollector extends Collector {
           mfs.add(new MetricFamilySamples(metricName, Type.GAUGE, keyStr, samples));
       }
 
+      JSONObject histJsonObject = this.getResponse(this.histogramsUrl);
+      for (Object key : histJsonObject.keySet()) {    	  
+    	  String keyStr = (String) key;
+    	  System.out.println("key: " + keyStr);
+    	  String bucketName = transformMetricName(keyStr) + "_bucket";
+    	  String counterName = transformMetricName(keyStr) + "_count";
+    	  JSONArray valArray = (JSONArray) histJsonObject.get(keyStr);
+    	  double le = 0;
+    	  double count = 0;
+    	  List<MetricFamilySamples.Sample> samples = new ArrayList<MetricFamilySamples.Sample>();
+    	  System.out.println("values: " + valArray.size());
+    	  for (int i = 0; i <= valArray.size(); i++) {
+    		  List<String> labelNames = new ArrayList<String>();
+              List<String> labelValues = new ArrayList<String>();
+              labelNames.add("original_key");
+              labelValues.add(keyStr);
+              if (i < valArray.size()) {
+            	  JSONObject bracket = (JSONObject) valArray.get(i);
+        		  le = new Double(bracket.get("upperLimit").toString());
+        		  labelNames.add("le");
+                  labelValues.add(Double.toString(le));
+        		  count += new Double(bracket.get("count").toString());
+        		  samples.add(new MetricFamilySamples.Sample(bucketName, labelNames, labelValues, count));  
+              } else {
+            	  labelNames.add("le");
+                  labelValues.add("+Inf");
+                  samples.add(new MetricFamilySamples.Sample(bucketName, labelNames, labelValues, count));
+              }		  
+    	  }
+    	  List<String> labelNames = new ArrayList<String>();
+          List<String> labelValues = new ArrayList<String>();
+          labelNames.add("original_key");
+          labelValues.add(keyStr);
+    	  samples.add(new MetricFamilySamples.Sample(counterName, labelNames, labelValues, count));
+    	  mfs.add(new MetricFamilySamples(bucketName, Type.HISTOGRAM, keyStr, samples));
+      }
+      
     }
 
     public List<MetricFamilySamples> collect() {
