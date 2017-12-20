@@ -9,8 +9,8 @@ An exporter for [Twitter Finagle](https://twitter.github.io/finagle/), for Prome
 
 `java -jar target/finagle_exporter-0.1-SNAPSHOT-jar-with-dependencies.jar` to run.
 
-*All metrics are exported as gauges.*
-*All histograms are exported as histograms.*
+- All metrics are exported as gauges.
+- All histograms are exported as histograms.
 
 ## Usage
 ```
