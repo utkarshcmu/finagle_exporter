@@ -17,6 +17,8 @@ java -jar target/finagle_exporter-0.1-SNAPSHOT-jar-with-dependencies.jar [finagl
 ```
 
 ### Defaults:
+```
 finagle_admin_host: localhost
 finagle_admin_port: 9990
 exporter_port: 9991
+```
